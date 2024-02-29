@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:wifi_iot/wifi_iot.dart';
 import 'wifi_connected.dart'; // Import the WifiConnectedScreen
@@ -10,6 +11,7 @@ class WifiListPage extends StatefulWidget {
 class _WifiListPageState extends State<WifiListPage> {
   List<WifiNetwork> _networks = [];
   TextEditingController _passwordController = TextEditingController();
+  bool _isScanning = false;
 
   @override
   void initState() {
@@ -18,9 +20,13 @@ class _WifiListPageState extends State<WifiListPage> {
   }
 
   Future<void> _scanWifiNetworks() async {
+    setState(() {
+      _isScanning = true;
+    });
     List<WifiNetwork> list = await WiFiForIoTPlugin.loadWifiList();
     setState(() {
       _networks = list;
+      _isScanning = false;
     });
   }
 
@@ -129,6 +135,17 @@ class _WifiListPageState extends State<WifiListPage> {
             ),
           );
         },
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _isScanning ? null : () {
+          Timer(Duration(seconds: 66), () {
+            setState(() {
+              _isScanning = false;
+            });
+          });
+          _scanWifiNetworks();
+        },
+        child: _isScanning ? CircularProgressIndicator() : Icon(Icons.refresh),
       ),
     );
   }

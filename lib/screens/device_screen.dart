@@ -20,7 +20,6 @@ class DeviceScreen extends StatefulWidget {
 
 class _DeviceScreenState extends State<DeviceScreen> {
   int? _rssi;
-  int? _mtuSize;
   BluetoothConnectionState _connectionState = BluetoothConnectionState.disconnected;
   List<BluetoothService> _services = [];
   bool _isDiscoveringServices = false;
@@ -30,7 +29,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
   late StreamSubscription<BluetoothConnectionState> _connectionStateSubscription;
   late StreamSubscription<bool> _isConnectingSubscription;
   late StreamSubscription<bool> _isDisconnectingSubscription;
-  late StreamSubscription<int> _mtuSubscription;
 
   @override
   void initState() {
@@ -44,13 +42,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
       if (state == BluetoothConnectionState.connected && _rssi == null) {
         _rssi = await widget.device.readRssi();
       }
-      if (mounted) {
-        setState(() {});
-      }
-    });
-
-    _mtuSubscription = widget.device.mtu.listen((value) {
-      _mtuSize = value;
       if (mounted) {
         setState(() {});
       }
@@ -74,7 +65,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
   @override
   void dispose() {
     _connectionStateSubscription.cancel();
-    _mtuSubscription.cancel();
     _isConnectingSubscription.cancel();
     _isDisconnectingSubscription.cancel();
     super.dispose();
@@ -134,16 +124,10 @@ class _DeviceScreenState extends State<DeviceScreen> {
     }
   }
 
-  Future onRequestMtuPressed() async {
-    try {
-      await widget.device.requestMtu(223, predelay: 0);
-      Snackbar.show(ABC.c, "Request Mtu: Success", success: true);
-    } catch (e) {
-      Snackbar.show(ABC.c, prettyException("Change Mtu Error:", e), success: false);
-    }
-  }
-
   List<Widget> _buildServiceTiles(BuildContext context, BluetoothDevice d) {
+    if (_isDiscoveringServices) {
+      return []; // Return an empty list if services are currently being discovered
+    }
     return _services
         .map(
           (s) => ServiceTile(
@@ -213,16 +197,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
     );
   }
 
-  Widget buildMtuTile(BuildContext context) {
-    return ListTile(
-        title: const Text('MTU Size'),
-        subtitle: Text('$_mtuSize bytes'),
-        trailing: IconButton(
-          icon: const Icon(Icons.edit),
-          onPressed: onRequestMtuPressed,
-        ));
-  }
-
   Widget buildConnectButton(BuildContext context) {
     return Row(children: [
       if (_isConnecting || _isDisconnecting) buildSpinner(context),
@@ -253,7 +227,6 @@ class _DeviceScreenState extends State<DeviceScreen> {
                 title: Text('Device is ${_connectionState.toString().split('.')[1]}.'),
                 trailing: buildGetServices(context),
               ),
-              buildMtuTile(context),
               ..._buildServiceTiles(context, widget.device),
             ],
           ),
