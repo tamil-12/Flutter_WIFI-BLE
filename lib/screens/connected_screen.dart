@@ -17,6 +17,7 @@ class _ConnectedPageState extends State<ConnectedPage> {
   late QualifiedCharacteristic _characteristic;
   double _gaugeValue = 0; // Variable to hold gauge value
   List<String> _items = []; // List to hold selected options
+  bool _isSwitchOn = false; // Variable to hold switch state
 
   @override
   void initState() {
@@ -273,8 +274,11 @@ class _ConnectedPageState extends State<ConnectedPage> {
           child: Column(
             children: [
               Switch(
-                value: false, // Initially set to false
+                value: _isSwitchOn,
                 onChanged: (value) {
+                  setState(() {
+                    _isSwitchOn = value;
+                  });
                   // Send data based on switch value
                   String dataToSend = value ? '1' : '0';
                   _sendData(dataToSend);
