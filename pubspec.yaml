@@ -41,6 +41,8 @@ dependencies:
   wifi_iot: ^0.3.19
   http: ^1.2.1
   flutter_blue: ^0.8.0
+  syncfusion_flutter_gauges: ^24.2.8
+
   permission_handler:
 dev_dependencies:
   flutter_test:

@@ -19,7 +19,7 @@ class Home extends StatelessWidget {
                 // Navigate to BluetoothScanPage
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (context) => ScanScreen()),
+                  MaterialPageRoute(builder: (context) => BluetoothScanPage()),
                 );
               },
               icon: Icon(Icons.bluetooth), // Bluetooth icon

@@ -1,320 +1,564 @@
 // import 'dart:async';
-// import 'dart:io';
-//
+// import 'dart:convert';
 // import 'package:flutter/material.dart';
-// import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+// import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+// import 'package:snowcounter/screens/connected_screen.dart';
+// import 'package:snowcounter/wifi_list_page.dart'; // Import the WiFi list page
+// import 'connected_screen.dart';
 //
-// import 'device_screen.dart';
-// import '../utils/snackbar.dart';
-// import '../widgets/system_device_tile.dart';
-// import '../widgets/scan_result_tile.dart';
-// import '../utils/extra.dart';
+// const SERVICE_UUID = "fc96f65e-318a-4001-84bd-77e9d12af44b";
+// const CHARACTERISTIC_UUID_RX = "04d3552e-b9b3-4be6-a8b4-aa43c4507c4d";
+// const CHARACTERISTIC_UUID_TX = "94b43599-5ea2-41e7-9d99-6ff9b904ae3a";
 //
-// class ScanScreen extends StatefulWidget {
-//   const ScanScreen({Key? key}) : super(key: key);
-//
+// class BluetoothScanPage extends StatefulWidget {
 //   @override
-//   State<ScanScreen> createState() => _ScanScreenState();
+//   _BluetoothScanPageState createState() => _BluetoothScanPageState();
 // }
 //
-// class _ScanScreenState extends State<ScanScreen> {
-//   List<BluetoothDevice> _systemDevices = [];
-//   List<ScanResult> _scanResults = [];
-//   bool _isScanning = false;
-//   late StreamSubscription<List<ScanResult>> _scanResultsSubscription;
-//   late StreamSubscription<bool> _isScanningSubscription;
+// class _BluetoothScanPageState extends State<BluetoothScanPage> {
+//   final flutterReactiveBle = FlutterReactiveBle();
+//   List<DiscoveredDevice> discoveredDevices = [];
+//   Map<String, bool> connectedDevices = {};
+//
+//   bool isScanning = false;
+//   bool isDeviceConnected = false;
+//   String deviceData = '';
+//   StreamSubscription? scanSubscription;
 //
 //   @override
 //   void initState() {
 //     super.initState();
+//   }
 //
-//     _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
-//       _scanResults = results;
-//       if (mounted) {
-//         setState(() {});
-//       }
-//     }, onError: (e) {
-//       Snackbar.show(ABC.b, prettyException("Scan Error:", e), success: false);
+//   Future<void> scanForDevices() async {
+//     setState(() {
+//       isScanning = true;
+//       discoveredDevices.clear(); // Clear existing devices before scanning
 //     });
 //
-//     _isScanningSubscription = FlutterBluePlus.isScanning.listen((state) {
-//       _isScanning = state;
-//       if (mounted) {
-//         setState(() {});
-//       }
-//     });
-//   }
-//
-//   @override
-//   void dispose() {
-//     _scanResultsSubscription.cancel();
-//     _isScanningSubscription.cancel();
-//     super.dispose();
-//   }
-//
-//   Future onScanPressed() async {
 //     try {
-//       _systemDevices = await FlutterBluePlus.systemDevices;
+//       scanSubscription =
+//           flutterReactiveBle.scanForDevices(withServices: []).listen((device) {
+//             setState(() {
+//               if (!discoveredDevices.any((element) =>
+//               element.id == device.id) && device.name != null) {
+//                 discoveredDevices.add(device);
+//                 connectedDevices[device.id] =
+//                 false; // Initialize as not connected
+//               }
+//             });
+//           }, onError: (dynamic error) {
+//             print('Error during scanning: $error');
+//             setState(() {
+//               isScanning = false;
+//             });
+//           }, onDone: () {
+//             setState(() {
+//               isScanning = false;
+//             });
+//           });
+//
+//       // Stop scanning after 10 seconds
+//       Timer(Duration(seconds: 10), () {
+//         scanSubscription?.cancel();
+//         setState(() {
+//           isScanning = false;
+//         });
+//       });
 //     } catch (e) {
-//       Snackbar.show(ABC.b, prettyException("System Devices Error:", e), success: false);
+//       print('Error during scanning: $e');
+//       setState(() {
+//         isScanning = false;
+//       });
 //     }
+//   }
+//
+//   Future<void> connectToDevice(DiscoveredDevice device) async {
 //     try {
-//       await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-//     } catch (e) {
-//       Snackbar.show(ABC.b, prettyException("Start Scan Error:", e), success: false);
-//     }
-//     if (mounted) {
-//       setState(() {});
-//     }
-//   }
+//       await flutterReactiveBle
+//           .connectToDevice(
+//         id: device.id,
+//         servicesWithCharacteristicsToDiscover: {},
+//         connectionTimeout: const Duration(seconds: 2),
+//       )
+//           .first;
+//       print('Connected to ${device.name}');
+//       setState(() {
+//         connectedDevices[device.id] = true; // Mark as connected
+//         isDeviceConnected = true;
+//       });
 //
-//   Future onStopPressed() async {
-//     try {
-//       FlutterBluePlus.stopScan();
-//     } catch (e) {
-//       Snackbar.show(ABC.b, prettyException("Stop Scan Error:", e), success: false);
-//     }
-//   }
-//
-//   void onConnectPressed(BluetoothDevice device) {
-//     device.connectAndUpdateStream().catchError((e) {
-//       Snackbar.show(ABC.c, prettyException("Connect Error:", e), success: false);
-//     });
-//     MaterialPageRoute route = MaterialPageRoute(
-//         builder: (context) => DeviceScreen(device: device), settings: RouteSettings(name: '/DeviceScreen'));
-//     Navigator.of(context).push(route);
-//   }
-//
-//   Future onRefresh() {
-//     if (_isScanning == false) {
-//       FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-//     }
-//     if (mounted) {
-//       setState(() {});
-//     }
-//     return Future.delayed(Duration(milliseconds: 500));
-//   }
-//
-//   Widget buildScanButton(BuildContext context) {
-//     if (FlutterBluePlus.isScanningNow) {
-//       return FloatingActionButton(
-//         child: const Icon(Icons.stop),
-//         onPressed: onStopPressed,
-//         backgroundColor: Colors.red,
-//       );
-//     } else {
-//       return FloatingActionButton(child: const Text("SCAN"), onPressed: onScanPressed);
-//     }
-//   }
-//
-//   List<Widget> _buildSystemDeviceTiles(BuildContext context) {
-//     return _systemDevices
-//         .map(
-//           (d) => SystemDeviceTile(
-//         device: d,
-//         onOpen: () => Navigator.of(context).push(
-//           MaterialPageRoute(
-//             builder: (context) => DeviceScreen(device: d),
-//             settings: RouteSettings(name: '/DeviceScreen'),
-//           ),
+//       Navigator.push(
+//         context,
+//         MaterialPageRoute(
+//           builder: (context) =>
+//               ConnectedPage(
+//                 deviceId: device.id,
+//                 sendDataToDevice: sendDataToDevice,
+//               ),
 //         ),
-//         onConnect: () => onConnectPressed(d),
-//       ),
-//     )
-//         .toList();
+//       );
+//
+//       // Subscribe to characteristic for receiving data
+//       flutterReactiveBle.subscribeToCharacteristic(
+//         QualifiedCharacteristic(
+//           serviceId: Uuid.parse(SERVICE_UUID),
+//           characteristicId: Uuid.parse(CHARACTERISTIC_UUID_TX),
+//           deviceId: device.id,
+//         ),
+//       ).listen((data) {
+//         setState(() {
+//           deviceData = utf8.decode(data); // Convert received data to string
+//         });
+//       });
+//     } catch (e) {
+//       print('Error connecting to ${device.name}: $e');
+//     }
 //   }
 //
-//   List<Widget> _buildScanResultTiles(BuildContext context) {
-//     return _scanResults
-//         .map(
-//           (r) => ScanResultTile(
-//         result: r,
-//         onTap: () => onConnectPressed(r.device),
-//       ),
-//     )
-//         .toList();
+//   Future<void> sendDataToDevice(String data) async {
+//     try {
+//       final encodedData = utf8.encode(data);
+//       await flutterReactiveBle.writeCharacteristicWithResponse(
+//         QualifiedCharacteristic(
+//           serviceId: Uuid.parse(SERVICE_UUID),
+//           characteristicId: Uuid.parse(CHARACTERISTIC_UUID_RX),
+//           deviceId: discoveredDevices
+//               .firstWhere((device) => connectedDevices[device.id] == true)
+//               .id,
+//         ),
+//         value: encodedData,
+//       );
+//     } catch (e) {
+//       print('Error sending data: $e');
+//     }
 //   }
 //
 //   @override
 //   Widget build(BuildContext context) {
-//     return ScaffoldMessenger(
-//       key: Snackbar.snackBarKeyB,
-//       child: Scaffold(
-//         appBar: AppBar(
-//           title: const Text('Find Devices'),
-//         ),
-//         body: RefreshIndicator(
-//           onRefresh: onRefresh,
-//           child: ListView(
-//             children: <Widget>[
-//               ..._buildSystemDeviceTiles(context),
-//               ..._buildScanResultTiles(context),
-//             ],
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text('Bluetooth Mode'),
+//         actions: [
+//           IconButton(
+//             icon: Icon(Icons.bluetooth),
+//             onPressed: () {
+//               // Handle Bluetooth button press here
+//               // You may want to navigate to another page or perform other actions
+//               // For now, let's just print a message
+//               print('Bluetooth button pressed');
+//             },
+//           ),
+//           IconButton(
+//             icon: Icon(Icons.wifi),
+//             onPressed: () {
+//               // Handle WiFi button press here
+//               // Navigate to WiFi list page
+//               Navigator.push(
+//                 context,
+//                 MaterialPageRoute(builder: (context) => WifiListPage()),
+//               );
+//             },
+//           ),
+//         ],
+//       ),
+//       body: Column(
+//         children: [
+//           ElevatedButton(
+//             onPressed: isScanning ? null : scanForDevices,
+//             child: Text(isScanning ? 'Scanning...' : 'Scan for Devices'),
+//           ),
+//           SizedBox(height: 10),
+//           Expanded(
+//             child: ListView.builder(
+//               itemCount: discoveredDevices.length,
+//               itemBuilder: (context, index) {
+//                 final device = discoveredDevices[index];
+//                 if (device.name != null) {
+//                   return ListTile(
+//                     title: Text(device.name!),
+//                     subtitle: Text(device.id),
+//                     trailing: ElevatedButton(
+//                       onPressed: connectedDevices[device.id] == true
+//                           ? null
+//                           : () => connectToDevice(device),
+//                       child: Text(
+//                         connectedDevices[device.id] == true
+//                             ? 'Connected'
+//                             : 'Connect',
+//                       ),
+//                     ),
+//                   );
+//                 } else {
+//                   // Return an empty container if device name is null
+//                   return Container();
+//                 }
+//               },
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+// }
+//
+
+// import 'dart:async';
+// import 'dart:convert';
+// import 'package:flutter/material.dart';
+// import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+// import 'package:snowcounter/screens/connected_screen.dart';
+// import 'package:snowcounter/wifi_list_page.dart'; // Import the WiFi list page
+// import 'connected_screen.dart';
+//
+// const SERVICE_UUID = "fc96f65e-318a-4001-84bd-77e9d12af44b";
+// const CHARACTERISTIC_UUID_RX = "04d3552e-b9b3-4be6-a8b4-aa43c4507c4d";
+// const CHARACTERISTIC_UUID_TX = "94b43599-5ea2-41e7-9d99-6ff9b904ae3a";
+//
+// class BluetoothScanPage extends StatefulWidget {
+//   @override
+//   _BluetoothScanPageState createState() => _BluetoothScanPageState();
+// }
+//
+// class _BluetoothScanPageState extends State<BluetoothScanPage> {
+//   final flutterReactiveBle = FlutterReactiveBle();
+//   List<DiscoveredDevice> discoveredDevices = [];
+//   Map<String, bool> connectedDevices = {};
+//
+//   bool isScanning = false;
+//   bool isDeviceConnected = false;
+//   String deviceData = '';
+//   StreamSubscription? scanSubscription;
+//   StreamSubscription? characteristicSubscription;
+//
+//   @override
+//   void initState() {
+//     super.initState();
+//   }
+//
+//   @override
+//   void dispose() {
+//     scanSubscription?.cancel();
+//     characteristicSubscription?.cancel();
+//     super.dispose();
+//   }
+//
+//   Future<void> scanForDevices() async {
+//     setState(() {
+//       isScanning = true;
+//       discoveredDevices.clear(); // Clear existing devices before scanning
+//     });
+//
+//     try {
+//       scanSubscription =
+//           flutterReactiveBle.scanForDevices(withServices: []).listen((device) {
+//             setState(() {
+//               if (!discoveredDevices.any((element) =>
+//               element.id == device.id) &&
+//                   device.name != null) {
+//                 discoveredDevices.add(device);
+//                 connectedDevices[device.id] =
+//                 false; // Initialize as not connected
+//               }
+//             });
+//           }, onError: (dynamic error) {
+//             print('Error during scanning: $error');
+//             setState(() {
+//               isScanning = false;
+//             });
+//           }, onDone: () {
+//             setState(() {
+//               isScanning = false;
+//             });
+//           });
+//
+//       // Stop scanning after 10 seconds
+//       Timer(Duration(seconds: 10), () {
+//         scanSubscription?.cancel();
+//         setState(() {
+//           isScanning = false;
+//         });
+//       });
+//     } catch (e) {
+//       print('Error during scanning: $e');
+//       setState(() {
+//         isScanning = false;
+//       });
+//     }
+//   }
+//
+//   Future<void> connectToDevice(DiscoveredDevice device) async {
+//     try {
+//       await flutterReactiveBle
+//           .connectToDevice(
+//         id: device.id,
+//         servicesWithCharacteristicsToDiscover: {},
+//         connectionTimeout: const Duration(seconds: 2),
+//       )
+//           .first;
+//       print('Connected to ${device.name}');
+//       setState(() {
+//         connectedDevices[device.id] = true; // Mark as connected
+//         isDeviceConnected = true;
+//       });
+//
+//       Navigator.push(
+//         context,
+//         MaterialPageRoute(
+//           builder: (context) => ConnectedPage(
+//             deviceId: device.id,
+//             sendDataToDevice: sendDataToDevice,
+//             deviceData: deviceData, // Pass the received data to ConnectedPage
+//
 //           ),
 //         ),
-//         floatingActionButton: buildScanButton(context),
+//       );
+//
+//       // Subscribe to characteristic for receiving data
+//       characteristicSubscription =
+//           flutterReactiveBle.subscribeToCharacteristic(
+//             QualifiedCharacteristic(
+//               serviceId: Uuid.parse(SERVICE_UUID),
+//               characteristicId: Uuid.parse(CHARACTERISTIC_UUID_RX),
+//               deviceId: device.id,
+//             ),
+//           ).listen((data) {
+//             setState(() {
+//               deviceData = utf8.decode(data); // Convert received data to string
+//             });
+//           });
+//     } catch (e) {
+//       print('Error connecting to ${device.name}: $e');
+//     }
+//   }
+//
+//   Future<void> sendDataToDevice(String data) async {
+//     try {
+//       final encodedData = utf8.encode(data);
+//       await flutterReactiveBle.writeCharacteristicWithResponse(
+//         QualifiedCharacteristic(
+//           serviceId: Uuid.parse(SERVICE_UUID),
+//           characteristicId: Uuid.parse(CHARACTERISTIC_UUID_RX),
+//           deviceId: discoveredDevices
+//               .firstWhere((device) => connectedDevices[device.id] == true)
+//               .id,
+//         ),
+//         value: encodedData,
+//       );
+//     } catch (e) {
+//       print('Error sending data: $e');
+//     }
+//   }
+//
+//   @override
+//   Widget build(BuildContext context) {
+//     return Scaffold(
+//       appBar: AppBar(
+//         title: Text('Bluetooth Mode'),
+//         actions: [
+//           IconButton(
+//             icon: Icon(Icons.bluetooth),
+//             onPressed: () {
+//               // Handle Bluetooth button press here
+//               // You may want to navigate to another page or perform other actions
+//               // For now, let's just print a message
+//               print('Bluetooth button pressed');
+//             },
+//           ),
+//           IconButton(
+//             icon: Icon(Icons.wifi),
+//             onPressed: () {
+//               // Handle WiFi button press here
+//               // Navigate to WiFi list page
+//               Navigator.push(
+//                 context,
+//                 MaterialPageRoute(builder: (context) => WifiListPage()),
+//               );
+//             },
+//           ),
+//         ],
+//       ),
+//       body: Column(
+//         children: [
+//           ElevatedButton(
+//             onPressed: isScanning ? null : scanForDevices,
+//             child: Text(isScanning ? 'Scanning...' : 'Scan for Devices'),
+//           ),
+//           SizedBox(height: 10),
+//           Expanded(
+//             child: ListView.builder(
+//               itemCount: discoveredDevices.length,
+//               itemBuilder: (context, index) {
+//                 final device = discoveredDevices[index];
+//                 if (device.name != null) {
+//                   return ListTile(
+//                     title: Text(device.name!),
+//                     subtitle: Text(device.id),
+//                     trailing: ElevatedButton(
+//                       onPressed: connectedDevices[device.id] == true
+//                           ? null
+//                           : () => connectToDevice(device),
+//                       child: Text(
+//                         connectedDevices[device.id] == true
+//                             ? 'Connected'
+//                             : 'Connect',
+//                       ),
+//                     ),
+//                   );
+//                 } else {
+//                   // Return an empty container if device name is null
+//                   return Container();
+//                 }
+//               },
+//             ),
+//           ),
+//           SizedBox(height: 10),
+//           Text('Received Data: $deviceData'),
+//         ],
 //       ),
 //     );
 //   }
 // }
 
-
 import 'dart:async';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
-import 'package:flutter_blue_plus/flutter_blue_plus.dart';
+import 'package:flutter_reactive_ble/flutter_reactive_ble.dart';
+import 'package:snowcounter/screens/connected_screen.dart';
 
-import 'device_screen.dart';
-import '../utils/snackbar.dart';
-import '../widgets/system_device_tile.dart';
-import '../widgets/scan_result_tile.dart';
-import '../utils/extra.dart';
-
-class ScanScreen extends StatefulWidget {
-  const ScanScreen({Key? key}) : super(key: key);
-
+class BluetoothScanPage extends StatefulWidget {
   @override
-  State<ScanScreen> createState() => _ScanScreenState();
+  _BluetoothScanPageState createState() => _BluetoothScanPageState();
 }
 
-class _ScanScreenState extends State<ScanScreen> {
-  List<BluetoothDevice> _systemDevices = [];
-  List<ScanResult> _scanResults = [];
-  bool _isScanning = false;
-  late StreamSubscription<List<ScanResult>> _scanResultsSubscription;
-  late StreamSubscription<bool> _isScanningSubscription;
+class _BluetoothScanPageState extends State<BluetoothScanPage> {
+  final flutterReactiveBle = FlutterReactiveBle();
+  List<DiscoveredDevice> discoveredDevices = [];
+  Map<String, bool> connectedDevices = {};
 
-  @override
-  void initState() {
-    super.initState();
+  bool isScanning = false;
 
-    _scanResultsSubscription = FlutterBluePlus.scanResults.listen((results) {
-      _scanResults = results;
-      if (mounted) {
-        setState(() {});
-      }
-    }, onError: (e) {
-      Snackbar.show(ABC.b, prettyException("Scan Error:", e), success: false);
-    });
-
-    _isScanningSubscription = FlutterBluePlus.isScanning.listen((state) {
-      _isScanning = state;
-      if (mounted) {
-        setState(() {});
-      }
-    });
-  }
+  StreamSubscription? scanSubscription;
 
   @override
   void dispose() {
-    _scanResultsSubscription.cancel();
-    _isScanningSubscription.cancel();
+    scanSubscription?.cancel();
     super.dispose();
   }
 
-  Future onScanPressed() async {
-    try {
-      _systemDevices = await FlutterBluePlus.systemDevices;
-    } catch (e) {
-      Snackbar.show(ABC.b, prettyException("System Devices Error:", e), success: false);
-    }
-    try {
-      await FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-    } catch (e) {
-      Snackbar.show(ABC.b, prettyException("Start Scan Error:", e), success: false);
-    }
-    if (mounted) {
-      setState(() {});
-    }
-  }
-
-  Future onStopPressed() async {
-    try {
-      FlutterBluePlus.stopScan();
-    } catch (e) {
-      Snackbar.show(ABC.b, prettyException("Stop Scan Error:", e), success: false);
-    }
-  }
-
-  void onConnectPressed(BluetoothDevice device) {
-    device.connectAndUpdateStream().catchError((e) {
-      Snackbar.show(ABC.c, prettyException("Connect Error:", e), success: false);
+  Future<void> scanForDevices() async {
+    setState(() {
+      isScanning = true;
+      discoveredDevices.clear(); // Clear existing devices before scanning
     });
-    MaterialPageRoute route = MaterialPageRoute(
-        builder: (context) => DeviceScreen(device: device), settings: RouteSettings(name: '/DeviceScreen'));
-    Navigator.of(context).push(route);
+
+    try {
+      scanSubscription = flutterReactiveBle
+          .scanForDevices(withServices: [])
+          .listen((device) {
+        setState(() {
+          if (!discoveredDevices.any((element) => element.id == device.id) &&
+              device.name != null) {
+            discoveredDevices.add(device);
+            connectedDevices[device.id] =
+            false; // Initialize as not connected
+          }
+        });
+      }, onError: (dynamic error) {
+        print('Error during scanning: $error');
+        setState(() {
+          isScanning = false;
+        });
+      }, onDone: () {
+        setState(() {
+          isScanning = false;
+        });
+      });
+
+      // Stop scanning after 6 seconds
+      Timer(Duration(seconds: 6), () {
+        if (isScanning) {
+          scanSubscription?.cancel();
+          setState(() {
+            isScanning = false;
+          });
+        }
+      });
+    } catch (e) {
+      print('Error during scanning: $e');
+      setState(() {
+        isScanning = false;
+      });
+    }
   }
 
-  Future onRefresh() {
-    if (_isScanning == false) {
-      FlutterBluePlus.startScan(timeout: const Duration(seconds: 15));
-    }
-    if (mounted) {
-      setState(() {});
-    }
-    return Future.delayed(Duration(milliseconds: 500));
-  }
+  Future<void> connectToDevice(DiscoveredDevice device) async {
+    try {
+      await flutterReactiveBle
+          .connectToDevice(
+        id: device.id,
+        servicesWithCharacteristicsToDiscover: {},
+        connectionTimeout: const Duration(seconds: 2),
+      )
+          .first;
+      print('Connected to ${device.name}');
+      setState(() {
+        connectedDevices[device.id] = true; // Mark as connected
+      });
 
-  Widget buildScanButton(BuildContext context) {
-    if (FlutterBluePlus.isScanningNow) {
-      return FloatingActionButton(
-        child: const Icon(Icons.stop),
-        onPressed: onStopPressed,
-        backgroundColor: Colors.red,
-      );
-    } else {
-      return FloatingActionButton(child: const Text("SCAN"), onPressed: onScanPressed);
-    }
-  }
-
-  List<Widget> _buildSystemDeviceTiles(BuildContext context) {
-    return _systemDevices
-        .map(
-          (d) => SystemDeviceTile(
-        device: d,
-        onOpen: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (context) => DeviceScreen(device: d),
-            settings: RouteSettings(name: '/DeviceScreen'),
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => ConnectedPage(
+            deviceId: device.id,
           ),
         ),
-        onConnect: () => onConnectPressed(d),
-      ),
-    )
-        .toList();
-  }
-
-  List<Widget> _buildScanResultTiles(BuildContext context) {
-    return _scanResults
-        .where((r) => r.device.name.isNotEmpty) // Filter out devices without names
-        .map(
-          (r) => ScanResultTile(
-        result: r,
-        onTap: () => onConnectPressed(r.device),
-      ),
-    )
-        .toList();
+      );
+    } catch (e) {
+      print('Error connecting to ${device.name}: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return ScaffoldMessenger(
-      key: Snackbar.snackBarKeyB,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Find Devices'),
-        ),
-        body: RefreshIndicator(
-          onRefresh: onRefresh,
-          child: ListView(
-            children: <Widget>[
-              ..._buildSystemDeviceTiles(context),
-              ..._buildScanResultTiles(context),
-            ],
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Bluetooth Mode'),
+      ),
+      body: Column(
+        children: [
+          ElevatedButton(
+            onPressed: isScanning ? null : scanForDevices,
+            child: Text(isScanning ? 'Scanning...' : 'Scan for Devices'),
           ),
-        ),
-        floatingActionButton: buildScanButton(context),
+          SizedBox(height: 10),
+          Expanded(
+            child: ListView.builder(
+              itemCount: discoveredDevices.length,
+              itemBuilder: (context, index) {
+                final device = discoveredDevices[index];
+                if (device.name != null) {
+                  return ListTile(
+                    title: Text(device.name!),
+                    subtitle: Text(device.id),
+                    trailing: ElevatedButton(
+                      onPressed: connectedDevices[device.id] == true
+                          ? null
+                          : () => connectToDevice(device),
+                      child: Text(
+                        connectedDevices[device.id] == true
+                            ? 'Connected'
+                            : 'Connect',
+                      ),
+                    ),
+                  );
+                } else {
+                  // Return an empty container if device name is null
+                  return Container();
+                }
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
